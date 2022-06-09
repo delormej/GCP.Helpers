@@ -1,5 +1,9 @@
 #!/bin/sh
-version=1.0.1
+version=1.0.2
+
+dotnet build
+dotnet pack
+
 echo 'Publishing version $version' to nuget.org...
 
 export nugetfile=nuget-key
