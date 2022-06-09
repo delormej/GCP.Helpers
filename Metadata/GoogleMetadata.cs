@@ -1,7 +1,7 @@
 using Google.Api.Gax;
 using Microsoft.Extensions.Configuration;
 
-namespace GCP.Helpers.Metadata
+namespace GcpHelpers.Metadata
 {   
     public static class GoogleMetadata
     {

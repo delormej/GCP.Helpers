@@ -6,7 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Security.Cryptography;
 using System.IO;
 
-namespace GCP.Helpers.Authentication
+namespace GcpHelpers.Authentication
 {   
     public class ConfigureJwtBearerOptions : IConfigureNamedOptions<JwtBearerOptions>
     {

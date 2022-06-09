@@ -2,7 +2,7 @@ using System.Reflection;
 using Google.Cloud.Firestore;
 using System.Collections;
 
-namespace GCP.Helpers.Firestore
+namespace GcpHelpers.Firestore
 {
     internal class FirestoreListDeserializer
     {

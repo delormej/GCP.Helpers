@@ -1,4 +1,4 @@
-namespace GCP.Helpers.Authentication
+namespace GcpHelpers.Authentication
 {   
     public class AuthenticationSettings
     {

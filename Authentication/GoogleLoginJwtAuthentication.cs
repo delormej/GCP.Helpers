@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
-namespace GCP.Helpers.Authentication
+namespace GcpHelpers.Authentication
 {
     public static class GoogleLoginJwtAuthentication
     {

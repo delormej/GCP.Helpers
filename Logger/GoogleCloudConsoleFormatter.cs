@@ -23,7 +23,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 
-namespace GCP.Helpers.Logging.Console
+namespace GcpHelpers.Logging.Console
 {
     /// <summary>
     /// Console formatter for use with Google Cloud Logging.

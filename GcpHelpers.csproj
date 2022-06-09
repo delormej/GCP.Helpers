@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
+    <PackageId>GcpHelpers</PackageId>
+    <Version>1.0.1</Version>
+    <Authors>Jason De Lorme</Authors>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <TargetFramework>net6.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>disable</Nullable>

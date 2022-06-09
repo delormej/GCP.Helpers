@@ -18,7 +18,7 @@ using System.Collections.Generic;
 using System.Text;
 using Microsoft.Extensions.Logging;
 
-namespace GCP.Helpers.Logging.Console
+namespace GcpHelpers.Logging.Console
 {
     public static class GoogleCloudConsoleFormatterConfig
     {

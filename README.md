@@ -1,1 +1,6 @@
-# GCP.Helpers
+# GcpHelpers
+
+# Publish to nuget
+```bash
+./publish.sh
+```
