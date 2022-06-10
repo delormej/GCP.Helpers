@@ -34,7 +34,7 @@ The problem with this is that you need to create a converter for every type.  Th
             new GenericFirestoreConverter<MyAddressType>("AddressId"),
             ...
         }
-    }MyUserType
+    }
 ```
 
 You will also note that the constructor has an _optional_ `string` parameter which is the name of the property that will be used as the `FirestoreDocumentId`.  
