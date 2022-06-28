@@ -51,6 +51,20 @@ If your POCO has children, i.e. `MyUserType` has a member `Addresses` of type `I
 ## Secret Manager
 ...
 
+## Logging
+Now included in the Beta version of the Google SDK.  To use add the folowing package to your `.csproj`
+
+```xml
+<PackageReference Include="Google.Cloud.Logging.Console" Version="1.0.0-beta01" />
+```
+Reference the package and add the formatter
+```csharp
+using Google.Cloud.Logging.Console;
+...
+
+builder.Logging.AddGoogleCloudConsole();
+```
+
 ## nuget
 This package is a public package available on [nuget](https://www.nuget.org/packages/GcpHelpers/), to use the package:
 
