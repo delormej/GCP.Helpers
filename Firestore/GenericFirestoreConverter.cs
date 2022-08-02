@@ -111,6 +111,9 @@ namespace GcpHelpers.Firestore
         /// </summary>
         private void TrySetValue(T item, PropertyInfo property, object value)
         {
+            if (value == null)
+                return;
+                
             try
             {
                 if (property.PropertyType == typeof(DateTime))
@@ -123,13 +126,17 @@ namespace GcpHelpers.Firestore
                     // Firestore always deserlizes int as Int64.
                     property.SetValue(item, (Int32)(Int64)value);
                 }
-               else if (value is IEnumerable<object> && property.PropertyType.IsGenericType)
-               {
-                   // Generic Lists of child objects are not handled implicitly since we 
-                   // are using a custom converter, so recursively create converters.
-                   IList list = CreateGenericList(property, value);
-                   property.SetValue(item, list);
-               }                
+                else if (property.PropertyType == typeof(string))
+                {
+                    property.SetValue(item, value.ToString());      
+                }                         
+                else if (value is IEnumerable<object> && property.PropertyType.IsGenericType)
+                {
+                    // Generic Lists of child objects are not handled implicitly since we 
+                    // are using a custom converter, so recursively create converters.
+                    IList list = CreateGenericList(property, value);
+                    property.SetValue(item, list);
+                }       
                 else
                 {
                     property.SetValue(item, value);
