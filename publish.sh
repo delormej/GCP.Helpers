@@ -1,5 +1,5 @@
 #!/bin/sh
-version=1.0.2
+version=1.0.3
 
 dotnet build
 dotnet pack
@@ -9,7 +9,7 @@ echo 'Publishing version $version' to nuget.org...
 export nugetfile=nuget-key
 
 if [ ! -f $nugetfile ]; then
-    echo "Please ensure you have a nuget API key stored in $nugetfile"
+    echo "Please ensure you have a nuget API key stored in a file named $nugetfile"
     exit 1
 fi
 
