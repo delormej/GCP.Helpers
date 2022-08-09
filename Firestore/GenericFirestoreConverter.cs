@@ -22,7 +22,10 @@ namespace GcpHelpers.Firestore
         /// of the type to be converted.
         /// </summary>
         public GenericFirestoreConverter(string idProperty) : this()
-        {                       
+        {   
+            if (idProperty == FirestoreId)
+                return;
+
             if(GetProperty(idProperty) == null)
                 throw new ArgumentException(
                     $"idProperty must be the name of a public property of type {typeof(T)}");
