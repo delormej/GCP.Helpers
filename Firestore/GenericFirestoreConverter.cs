@@ -75,7 +75,7 @@ namespace GcpHelpers.Firestore
                 {
                     PropertyInfo property = null;
 
-                    if (pair.Key == FirestoreId)
+                    if (pair.Key == FirestoreId && _idProperty != null)
                         property = GetProperty(_idProperty);
                     else
                         property = GetProperty(pair.Key);
