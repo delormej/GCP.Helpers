@@ -139,6 +139,22 @@ namespace GcpHelpers.Firestore
                     // are using a custom converter, so recursively create converters.
                     IList list = CreateGenericList(property, value);
                     property.SetValue(item, list);
+                }
+                else if (value is List<object> && property.PropertyType.IsArray)
+                {
+                    Type generic = typeof(List<>);
+                    Type[] typeArgs = { property.PropertyType.GetElementType() };
+                    Type constructed = generic.MakeGenericType(typeArgs);
+                    
+                    var instance = Activator.CreateInstance(constructed);
+                    MethodInfo method = constructed.GetMethod("ToArray");
+
+                    foreach (var o in (List<object>)value)
+                    {
+                        ((IList)instance).Add(o);
+                    }
+
+                    property.SetValue(item, method.Invoke(instance, null));
                 }       
                 else
                 {
