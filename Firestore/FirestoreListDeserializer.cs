@@ -1,6 +1,7 @@
 using System.Reflection;
 using Google.Cloud.Firestore;
 using System.Collections;
+using System.Collections.Concurrent;
 
 namespace GcpHelpers.Firestore
 {
@@ -9,6 +10,9 @@ namespace GcpHelpers.Firestore
         public MethodInfo Method;
         public PropertyInfo Property;
         public object Instance;
+        private static readonly object _listLock = new();
+        private static readonly ConcurrentDictionary<Type, FirestoreListDeserializer> 
+            _listConverters = new();
 
         public IList CreateList()
         {
@@ -20,30 +24,34 @@ namespace GcpHelpers.Firestore
             return Method.Invoke(Instance, new object[] { value });                
         }
 
-        private static Dictionary<Type, FirestoreListDeserializer> _listConverters =
-            new Dictionary<Type, FirestoreListDeserializer>();
-
         public static FirestoreListDeserializer GetConverter(PropertyInfo property)
         {
-            Type bclType = property.PropertyType.GenericTypeArguments.First();
-
-            if (!_listConverters.ContainsKey(bclType))
+            lock(_listLock)
             {
-                Type generic = typeof(GenericFirestoreConverter<>);
-                Type[] typeArgs = { bclType };
-                Type constructed = generic.MakeGenericType(typeArgs);
-                MethodInfo method = constructed.GetMethod("FromFirestore");
-                var instance = Activator.CreateInstance(constructed);
+                Type bclType = property.PropertyType.GenericTypeArguments.First();
 
-                _listConverters.Add(bclType, 
-                    new FirestoreListDeserializer { 
-                        Method = method,
-                        Property = property, 
-                        Instance = instance }
-                );
+                if (!_listConverters.ContainsKey(bclType))
+                {
+                    Type generic = typeof(GenericFirestoreConverter<>);
+                    Type[] typeArgs = { bclType };
+                    Type constructed = generic.MakeGenericType(typeArgs);
+                    MethodInfo method = constructed.GetMethod("FromFirestore");
+                    var instance = Activator.CreateInstance(constructed);
+
+                    var deserializer = new FirestoreListDeserializer { 
+                            Method = method,
+                            Property = property, 
+                            Instance = instance };
+
+                    _listConverters.AddOrUpdate(bclType, deserializer, (_,_) => deserializer);
+
+                    return deserializer;
+                }
+                else
+                {
+                    return _listConverters[bclType];
+                }
             }
-
-            return _listConverters[bclType];
         }
     }
 }
