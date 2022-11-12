@@ -32,9 +32,8 @@ namespace GcpHelpers.Firestore
 
                 if (!_listConverters.ContainsKey(bclType))
                 {
-                    MethodInfo method;
                     object instance = Helper.CreateGenericFirestoreConverter(bclType, 
-                        "FromFirestore", out method);
+                        "FromFirestore", out MethodInfo method);
 
                     var deserializer = new FirestoreListDeserializer { 
                             Method = method,

@@ -169,7 +169,7 @@ namespace GcpHelpers.Firestore
                 {
                     // Generic Lists of child objects are not handled implicitly since we 
                     // are using a custom converter, so recursively create converters.
-                    IList list = CreateGenericList(property, value);
+                    IList list = Helper.CreateGenericList(property, value);
                     property.SetValue(item, list);
                 }
                 else if (value is List<object> && property.PropertyType.IsArray)
@@ -190,7 +190,8 @@ namespace GcpHelpers.Firestore
                 }       
                 else if (value is IDictionary<string, object>)
                 {
-                    property.SetValue(item, ConvertFromFirestore(property, value));
+                    property.SetValue(item, 
+                        Helper.ConvertFromFirestore(property, value));
                 }
                 else 
                 {
@@ -201,50 +202,6 @@ namespace GcpHelpers.Firestore
             {
                 Console.WriteLine($"Error in TrySetValue {property.Name}: {e.Message}");
             }
-        }
-
-        private object ConvertFromFirestore(PropertyInfo property, object value)
-        {
-            var converter = Helper.CreateGenericFirestoreConverter(property.PropertyType, 
-                "FromFirestore", out MethodInfo method);
-
-            if (converter != null && method !=null)
-            {
-                return method.Invoke(converter, new object[] { value });
-            }
-            else
-            {
-                throw new ApplicationException(
-                    $"Unable to create a GenericFirestoreConverter<{property.PropertyType.Name}> for {property.Name}");
-            }            
-        }
-
-        /// <summary>
-        /// Supports recursive instantiation of this GenericFirestoreConverter for child items
-        /// which are generically returned from Firestore in an enumerable list.
-        /// </summary>
-        private IList CreateGenericList(PropertyInfo property, object value)
-        {
-            var values = (IEnumerable<object>)value;
-
-            try 
-            {
-                var converter = FirestoreListDeserializer.GetConverter(property);
-                var list = converter.CreateList();
-
-                foreach (var item in values) 
-                {
-                    var result = converter.Convert(item);
-                    list.Add(result);
-                }
-
-                return list;
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine($"Error serializaing {property.Name}: {e.Message}");
-                return null;
-            }          
         }
     }
 }
