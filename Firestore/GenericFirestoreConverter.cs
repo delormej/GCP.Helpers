@@ -16,13 +16,18 @@ namespace GcpHelpers.Firestore
         private readonly string _idProperty;
         // Expected attribute name for the required unique identifier.
         private const string FirestoreId = "id";
+        private readonly ConverterRegistry _registry;
 
         /// <summary>
         /// Create a converter by specifing the unique identifier property name
         /// of the type to be converted.
         /// </summary>
-        public GenericFirestoreConverter(string idProperty) : this()
-        {   
+        public GenericFirestoreConverter(string idProperty, 
+            ConverterRegistry registry = null) : this()
+        {
+            if (registry != null)
+                _registry = registry;
+   
             if (idProperty == FirestoreId)
                 return;
 
@@ -59,11 +64,38 @@ namespace GcpHelpers.Firestore
                 }
                 else
                 {
-                    map.Add(p.Name, p.GetValue(value));
+                    IFirestoreConverter<T> converter = GetConverter<T>(p);  
+                    
+                    if (converter != null)
+                        map.Add(p.Name, converter.ToFirestore((T)p.GetValue(value)));
+                    else
+                        map.Add(p.Name, p.GetValue(value));
                 }
             }
             return map;
         } 
+
+        private IFirestoreConverter<P> GetConverter<P>(PropertyInfo p)
+        {
+            if (_registry == null)
+                return null;
+
+            foreach (var c in _registry)
+            {
+                var converter = c as IFirestoreConverter<P>;
+
+                if (converter == null)
+                    continue;
+
+                if (converter.GetType().GenericTypeArguments[0].FullName ==
+                    p.PropertyType.FullName)
+                {
+                    return converter;
+                }
+            }
+            
+            return null;
+        }
 
         public T FromFirestore(object value)
         {
@@ -156,7 +188,11 @@ namespace GcpHelpers.Firestore
 
                     property.SetValue(item, method.Invoke(instance, null));
                 }       
-                else
+                else if (value is IDictionary<string, object>)
+                {
+                    property.SetValue(item, ConvertFromFirestore(property, value));
+                }
+                else 
                 {
                     property.SetValue(item, value);
                 }
@@ -165,6 +201,22 @@ namespace GcpHelpers.Firestore
             {
                 Console.WriteLine($"Error in TrySetValue {property.Name}: {e.Message}");
             }
+        }
+
+        private object ConvertFromFirestore(PropertyInfo property, object value)
+        {
+            var converter = Helper.CreateGenericFirestoreConverter(property.PropertyType, 
+                "FromFirestore", out MethodInfo method);
+
+            if (converter != null && method !=null)
+            {
+                return method.Invoke(converter, new object[] { value });
+            }
+            else
+            {
+                throw new ApplicationException(
+                    $"Unable to create a GenericFirestoreConverter<{property.PropertyType.Name}> for {property.Name}");
+            }            
         }
 
         /// <summary>

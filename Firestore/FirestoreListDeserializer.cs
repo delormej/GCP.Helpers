@@ -32,11 +32,9 @@ namespace GcpHelpers.Firestore
 
                 if (!_listConverters.ContainsKey(bclType))
                 {
-                    Type generic = typeof(GenericFirestoreConverter<>);
-                    Type[] typeArgs = { bclType };
-                    Type constructed = generic.MakeGenericType(typeArgs);
-                    MethodInfo method = constructed.GetMethod("FromFirestore");
-                    var instance = Activator.CreateInstance(constructed);
+                    MethodInfo method;
+                    object instance = Helper.CreateGenericFirestoreConverter(bclType, 
+                        "FromFirestore", out method);
 
                     var deserializer = new FirestoreListDeserializer { 
                             Method = method,
