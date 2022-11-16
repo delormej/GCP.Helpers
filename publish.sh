@@ -1,5 +1,5 @@
 #!/bin/sh
-version=1.0.8
+version=1.0.9
 
 dotnet build
 dotnet pack
