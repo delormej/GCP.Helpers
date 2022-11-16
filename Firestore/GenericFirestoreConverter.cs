@@ -54,13 +54,15 @@ namespace GcpHelpers.Firestore
                     map.Add(FirestoreId, p.GetValue(value));
                 }
 
-                // Deal with instances where DateTime is empty.
                 if (p.PropertyType == typeof(DateTime))
                 {
-                    var dateValue = (DateTime)p.GetValue(value);
-                    map.Add(p.Name, 
-                        DateTime.SpecifyKind(dateValue, DateTimeKind.Utc)
-                    );
+                    var dateValue = p.GetValue(value) as DateTime?;
+                    
+                    if (dateValue == null)
+                        dateValue = DateTime.MinValue;
+
+                    // Firestore requires storing DateTime in UTC
+                    map.Add(p.Name, dateValue?.ToUniversalTime());
                 }
                 else
                 {
