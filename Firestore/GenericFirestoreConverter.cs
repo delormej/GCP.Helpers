@@ -161,7 +161,7 @@ namespace GcpHelpers.Firestore
                 else if (property.PropertyType == typeof(Int32))
                 {
                     // Firestore always deserlizes int as Int64.
-                    property.SetValue(item, (Int32)(Int64)value);
+                    property.SetValue(item, Convert.ToInt32(value));
                 }
                 else if (property.PropertyType == typeof(string))
                 {
