@@ -48,6 +48,9 @@ namespace GcpHelpers.Firestore
             var map = new Dictionary<string, object>();
             foreach(var p in _properties)
             {
+                if (!p.CanRead)
+                    continue;
+                    
                 // Firestore expects an id property as unique identifier.
                 if (p.Name == _idProperty)
                 {
@@ -114,7 +117,7 @@ namespace GcpHelpers.Firestore
                     else
                         property = GetProperty(pair.Key);
                     
-                    if (property != null)
+                    if (property != null && property.CanWrite)
                         TrySetValue(item, property, pair.Value);
                 }
             }
@@ -124,10 +127,11 @@ namespace GcpHelpers.Firestore
 
         private PropertyInfo[] GetProperties()
         {
-            var properties = typeof(T).GetProperties(BindingFlags.Public|BindingFlags.Instance);
-            // Only use properties that can be written to and read.
-            return properties.Where(p => p.CanRead == true && p.CanWrite == true)
-                .ToArray();
+            var properties = typeof(T).GetProperties(
+                BindingFlags.Public|BindingFlags.Instance);
+
+            return properties; /*.Where(p => p.CanRead == true && p.CanWrite == true)
+                .ToArray(); */
         }
 
         private PropertyInfo GetProperty(string name)
@@ -157,6 +161,20 @@ namespace GcpHelpers.Firestore
                 {
                     Timestamp obj = (Timestamp)value;
                     property.SetValue(item, obj.ToDateTime());
+                }
+                else if (property.PropertyType.IsEnum)
+                {
+                    if (value is int)
+                    {
+                        string name = Enum.GetName(property.PropertyType, value);
+                        property.SetValue(item, Enum.Parse(property.PropertyType, name));
+                    }
+                    else
+                    {
+                        property.SetValue(item, 
+                            Enum.Parse(property.PropertyType, value.ToString())
+                        );
+                    }
                 }
                 else if (property.PropertyType == typeof(Int32))
                 {
