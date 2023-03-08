@@ -154,48 +154,57 @@ namespace GcpHelpers.Firestore
         {
             if (value == null)
                 return;
-                
+            
+            // Check for Nullable<T>'
+            Type propertyType = Nullable.GetUnderlyingType(property.PropertyType);
+
+            if (propertyType == null)
+                propertyType = property.PropertyType;
+
             try
             {
-                if (property.PropertyType == typeof(DateTime))
+                if (propertyType == typeof(DateTime))
                 {
                     Timestamp obj = (Timestamp)value;
                     property.SetValue(item, obj.ToDateTime());
                 }
-                else if (property.PropertyType.IsEnum)
+                else if (propertyType.IsEnum)
                 {
+                    if (value == null)
+                        return;
+                        
                     if (value is int)
                     {
-                        string name = Enum.GetName(property.PropertyType, value);
-                        property.SetValue(item, Enum.Parse(property.PropertyType, name));
+                        string name = Enum.GetName(propertyType, value);
+                        property.SetValue(item, Enum.Parse(propertyType, name));
                     }
                     else
                     {
                         property.SetValue(item, 
-                            Enum.Parse(property.PropertyType, value.ToString())
+                            Enum.Parse(propertyType, value.ToString())
                         );
                     }
                 }
-                else if (property.PropertyType == typeof(Int32))
+                else if (propertyType == typeof(Int32))
                 {
                     // Firestore always deserlizes int as Int64.
                     property.SetValue(item, Convert.ToInt32(value));
                 }
-                else if (property.PropertyType == typeof(string))
+                else if (propertyType == typeof(string))
                 {
                     property.SetValue(item, value.ToString());      
                 }                         
-                else if (value is IEnumerable<object> && property.PropertyType.IsGenericType)
+                else if (value is IEnumerable<object> && propertyType.IsGenericType)
                 {
                     // Generic Lists of child objects are not handled implicitly since we 
                     // are using a custom converter, so recursively create converters.
                     IList list = Helper.CreateGenericList(property, value);
                     property.SetValue(item, list);
                 }
-                else if (value is List<object> && property.PropertyType.IsArray)
+                else if (value is List<object> && propertyType.IsArray)
                 {
                     Type generic = typeof(List<>);
-                    Type[] typeArgs = { property.PropertyType.GetElementType() };
+                    Type[] typeArgs = { propertyType.GetElementType() };
                     Type constructed = generic.MakeGenericType(typeArgs);
                     
                     var instance = Activator.CreateInstance(constructed);
