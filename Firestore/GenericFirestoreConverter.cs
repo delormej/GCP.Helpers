@@ -48,12 +48,17 @@ public class GenericFirestoreConverter<T> : FirestoreConverterBase,
             if (propertyValue == null)
                 continue;
 
-            string propertyName;
+            string propertyName = p.Key;
 
-            if (p.Key == _firestoreDocumentId)
-                propertyName = FirestoreDocumentId;
-            else
-                propertyName = p.Key;
+            // Object can have id & customId    -- add both to the map
+            // Object has only id               -- add to the map "id"
+            // Object has only customId         -- add both to the map
+
+            if (propertyName == _firestoreDocumentId &&
+                _firestoreDocumentId != FirestoreDocumentId)
+            {
+                map.Add(FirestoreDocumentId, propertyValue);
+            }
 
             object serializedValue = null;
 
