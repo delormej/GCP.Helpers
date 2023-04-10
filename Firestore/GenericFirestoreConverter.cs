@@ -1,6 +1,7 @@
 using Google.Cloud.Firestore;
 using System.Reflection;
 using Microsoft.Extensions.Logging;
+using System.Collections;
 
 namespace GcpHelpers.Firestore;
 
@@ -10,29 +11,29 @@ namespace GcpHelpers.Firestore;
 /// <see ref="https://cloud.google.com/dotnet/docs/reference/Google.Cloud.Firestore/latest/datamodel#custom-converters">Custom Converters</see>
 /// <see ref="https://github.com/googleapis/google-cloud-dotnet/issues/3255">Related github issue</see>
 /// </summary>
-public class GenericFirestoreConverter<T> : IFirestoreConverter<T> where T : new()
+public class GenericFirestoreConverter<T> : FirestoreConverterBase, 
+    IFirestoreConverter<T> where T : new()
 {
-    ILogger _log;
-    string _firestoreDocumentId;
-    ConverterRegistry _converters;
-    const string FirestoreDocumentId = "id";
-    readonly Dictionary<string, PropertyInfo> _properties;
+    public const string FirestoreDocumentId = "id";
+
+    private string _firestoreDocumentId;
+    private readonly Dictionary<string, PropertyInfo> _properties;
     
-    public GenericFirestoreConverter(ILogger log, 
-        ConverterRegistry registryCache,
-        string firestoreDocumentId)
+    public GenericFirestoreConverter(
+        string firestoreDocumentId = FirestoreDocumentId) : base()
     {
-        _log = log;
-        _converters = registryCache;
         _firestoreDocumentId = firestoreDocumentId;
         _properties = GetProperties();
 
-        _properties.TryGetValue(_firestoreDocumentId, 
-            out PropertyInfo idProperty);
-
-        if (idProperty == null)
-            throw new ArgumentException($"Unable to find required id property {_firestoreDocumentId} on {nameof(T)}");
+        ValidateDocumentId();
     }
+
+    protected override void Register()
+    {
+        ConverterRegistry.TryAdd(typeof(T), this);
+
+        _log?.LogDebug($"{typeof(T).FullName} converter registered.");
+    }    
 
     public object ToFirestore(T value)
     {
@@ -40,20 +41,56 @@ public class GenericFirestoreConverter<T> : IFirestoreConverter<T> where T : new
         
         foreach(var p in _properties)
         {
+            PropertyInfo property = p.Value;
+            Type propertyType = property.PropertyType;
+            object propertyValue = property.GetValue(value);
+
+            if (propertyValue == null)
+                continue;
+
             string propertyName;
-            object propertyValue;
-            
+
             if (p.Key == _firestoreDocumentId)
                 propertyName = FirestoreDocumentId;
             else
                 propertyName = p.Key;
 
-            propertyValue = p.Value.GetValue(value);
-            
-            if (p.Value.DeclaringType == typeof(DateTime))
-                propertyValue = GetUtcDate(propertyValue);
+            object serializedValue = null;
 
-            map.Add(propertyName, propertyValue);
+            if (IsRepeatedField(property))
+            {
+                var childMap = new List<Dictionary<string, object>>();
+
+                Type genericType = propertyType.GenericTypeArguments[0] ?? typeof(object);
+                
+                if (ConverterRegistry.ContainsKey(genericType))
+                {
+                    object converter = GetConverter(genericType);
+                    MethodInfo method = converter.GetType().GetMethod("ToFirestore");
+
+                    foreach (var v in (IEnumerable)propertyValue)
+                    {
+                        childMap.Add( (Dictionary<string, object>)
+                            method.Invoke(converter, new object[] { v }));
+                    }
+                }            
+                else
+                {
+                    foreach (var v in (IEnumerable)propertyValue)
+                    {
+                        childMap.Add( (Dictionary<string, object>)
+                            ConvertValue(p.Value, propertyValue));
+                    }
+                }
+                
+                serializedValue = childMap;
+            }
+            else
+            {
+                serializedValue = ConvertValue(p.Value, propertyValue);
+            }
+            
+            map.Add(propertyName, serializedValue);
         }
 
         return map;
@@ -64,54 +101,51 @@ public class GenericFirestoreConverter<T> : IFirestoreConverter<T> where T : new
         var map = value as IDictionary<string, object>;
 
         if (map == null)
-            throw new ArgumentException($"Unexpected value: {value.GetType()}");
+        {
+            _log?.LogError($"Unexpected value: {value.GetType()}");
+            return default;
+        }
 
-        T converted = new();
+        T item = new();
 
-        foreach (var kvp in map)
-            Convert(converted, kvp.Key, kvp.Value);
+        foreach (var pair in map)
+        {
+            string propertyName;
 
-        return converted;
+            if (pair.Key == FirestoreDocumentId && _firestoreDocumentId != null)
+                propertyName = _firestoreDocumentId;
+            else
+                propertyName = pair.Key;
+            
+            TrySetValue(item, pair.Key, pair.Value);
+        }
+
+        return item;
     }
 
-    protected virtual void Convert(T instance, string name, object value)
+    protected virtual void TrySetValue(T instance, string name, object value)
     {
+        if (name == FirestoreDocumentId)
+            name = _firestoreDocumentId;
+
         _properties.TryGetValue(name, out PropertyInfo property);
 
-        if (property == null)
-        {
-            _log?.LogError($"Unable to find property {name} in map on type {nameof(T)}");
+        if (value == null || property == null || !property.CanWrite)
             return;
+        try
+        {
+            property.SetValue(instance, ConvertValue(property, value));        
         }
-
-        TrySetValue(instance, property, value);
+        catch (Exception e)
+        {
+            _log?.LogError($"Unable to convert {property.Name} of type {property.DeclaringType.FullName}, error:  {e.Message}");
+        }
     }
 
-    protected virtual object ConvertFromDictionary(PropertyInfo property, 
-        IDictionary<string, object> value)
-    {
-        MethodInfo method = null;
-        object converter = null;
-
-        foreach (var c in _converters)
-        {
-            if (property.DeclaringType !=
-                    c.GetType().GetGenericTypeDefinition())
-                continue;
-
-            converter = c;
-            method = converter.GetType().GetMethod("FromFirestore");
-            break;   
-        }
-
-        if (method == null)
-        {
-            _log?.LogError($"Unable to find converter for type {nameof(property.DeclaringType)}");
-            return null;
-        }
-        
-        return method.Invoke(converter, new object[] { value });
-    }  
+    private bool IsRepeatedField(PropertyInfo p) =>
+        p.PropertyType.IsGenericType && 
+                (p.PropertyType.GetGenericTypeDefinition() == typeof(List<>) ||
+                p.PropertyType.GetGenericTypeDefinition() == typeof(IEnumerable<>));
 
     private Dictionary<string, PropertyInfo> GetProperties()
     {
@@ -122,7 +156,14 @@ public class GenericFirestoreConverter<T> : IFirestoreConverter<T> where T : new
         if (properties != null)
         {
             foreach (var p in properties)
+            {
+                // Skip "id" if a custom id property name was specified
+                if (_firestoreDocumentId != FirestoreDocumentId && 
+                        p.Name == FirestoreDocumentId)
+                    continue;
+                
                 dictionary.Add(p.Name, p);
+            }
         }
         else
         {
@@ -132,91 +173,15 @@ public class GenericFirestoreConverter<T> : IFirestoreConverter<T> where T : new
         return dictionary;
     }
 
-    private void TrySetValue(T item, PropertyInfo property, object value)
+    private void ValidateDocumentId()
     {
-        if (value == null)
+        if (_firestoreDocumentId != FirestoreDocumentId)
         {
-            _log?.LogWarning($"Value of {property.Name} on {nameof(T)} null.");
-            return;
+            _properties.TryGetValue(_firestoreDocumentId, 
+                out PropertyInfo idProperty);
+
+            if (idProperty == null)
+                throw new ArgumentException($"Unable to find required id property {_firestoreDocumentId} on {typeof(T).FullName}");
         }
-       
-        try
-        {
-            property.SetValue(item, GetPropertyValue(property, value));
-        }
-        catch (Exception e)
-        {
-            _log?.LogError($"Unable to convert {property.Name} of type {nameof(property.DeclaringType)} on {nameof(T)}, error:  {e.Message}");
-        }
-    }
-
-    private object GetPropertyValue(PropertyInfo property, object value)
-    {
-        // Check for Nullable<T>'
-        Type propertyType = Nullable.GetUnderlyingType(property.PropertyType);
-
-        if (propertyType == null)
-            propertyType = property.PropertyType;
-
-        object propertyValue = null;
-
-        if (propertyType == typeof(DateTime))
-            propertyValue = GetUtcDate(value);
-        else if (propertyType.IsEnum)
-            propertyValue = GetEnum(propertyType, value);
-        else if (propertyType == typeof(Int32))
-            propertyValue = System.Convert.ToInt32(value); // Firestore always deserlizes int as Int64.
-        else if (propertyType == typeof(string))
-            propertyValue = value.ToString();
-        else if (value is IEnumerable<object> && propertyType.IsGenericType)
-            propertyValue = Helper.CreateGenericList(property, value);
-        else if (value is List<object> && propertyType.IsArray)
-            propertyValue = GetList(propertyType, value);       
-        else if (value is IDictionary<string, object>)
-            propertyValue = ConvertFromDictionary(property, (IDictionary<string, object>)value);
-        else 
-            propertyValue = value;     
-
-        return propertyValue;   
-    }
-
-    private object GetUtcDate(object value)
-    {
-        var dateValue = value as DateTime?;
-        
-        if (dateValue == null)
-            dateValue = DateTime.MinValue;        
-
-        return dateValue?.ToUniversalTime();
-    }
-
-    private object GetEnum(Type propertyType, object value)
-    {
-        if (value is int)
-        {
-            string name = Enum.GetName(propertyType, value);
-            return Enum.Parse(propertyType, name);
-        }
-        else
-        {
-            return Enum.Parse(propertyType, value.ToString());
-        }
-    }
-
-    private object GetList(Type propertyType, object value)
-    {
-        Type generic = typeof(List<>);
-        Type[] typeArgs = { propertyType.GetElementType() };
-        Type constructed = generic.MakeGenericType(typeArgs);
-        
-        var instance = Activator.CreateInstance(constructed);
-        MethodInfo method = constructed.GetMethod("ToArray");
-
-        foreach (var o in (List<object>)value)
-        {
-            ((IList<object>)instance).Add(o);
-        }
-
-        return method.Invoke(instance, null);
     }
 }
