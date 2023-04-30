@@ -16,10 +16,15 @@ namespace GcpHelpers.Firestore
 
         public IList CreateList()
         {
-            if (Property.PropertyType.GenericTypeArguments.Count() < 1)
-                throw new ApplicationException($"Unable to create list, no generic type argument for {Property.Name}.");
+            return CreateGenericList(Property);
+        }
 
-            Type t = Property.PropertyType.GenericTypeArguments.First();
+        public static IList CreateGenericList(PropertyInfo property)
+        {
+            if (property.PropertyType.GenericTypeArguments.Count() < 1)
+                throw new ApplicationException($"Unable to create list, no generic type argument for {property.Name}.");
+
+            Type t = property.PropertyType.GenericTypeArguments.First();
 
             var listType = typeof(List<>);
             var constructedListType = listType.MakeGenericType(t);
