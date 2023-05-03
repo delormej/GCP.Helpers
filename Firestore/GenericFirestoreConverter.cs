@@ -9,25 +9,20 @@ namespace GcpHelpers.Firestore
     /// without explicit attribute decoration.
     /// <see ref="https://cloud.google.com/dotnet/docs/reference/Google.Cloud.Firestore/latest/datamodel#custom-converters">Custom Converters</see>
     /// </summary>
-    public class GenericFirestoreConverter<T> 
-            : IFirestoreConverter<T> where T : class, new()
+    public class GenericFirestoreConverter<T> : IFirestoreConverter<T> 
+            where T : class, new()
     {
         private readonly PropertyInfo[] _properties;
         private readonly string _idProperty;
         // Expected attribute name for the required unique identifier.
         private const string FirestoreId = "id";
-        private readonly ConverterRegistry _registry;
 
         /// <summary>
         /// Create a converter by specifing the unique identifier property name
         /// of the type to be converted.
         /// </summary>
-        public GenericFirestoreConverter(string idProperty, 
-            ConverterRegistry registry = null) : this()
+        public GenericFirestoreConverter(string idProperty) : this()
         {
-            if (registry != null)
-                _registry = registry;
-   
             if (idProperty == FirestoreId)
                 return;
 
@@ -43,61 +38,34 @@ namespace GcpHelpers.Firestore
             _properties = GetProperties();
         }
 
-        public object ToFirestore(T value) 
+        public object ToFirestore(T source) 
         {
             var map = new Dictionary<string, object>();
+            
             foreach(var p in _properties)
             {
+                object value = p.GetValue(source);
+
+                if (value == null)
+                    continue;
+
                 // Firestore expects an id property as unique identifier.
                 if (p.Name == _idProperty)
                 {
-                    map.Add(FirestoreId, p.GetValue(value));
+                    map.Add(FirestoreId, value);
                 }
 
-                if (p.PropertyType == typeof(DateTime))
-                {
-                    var dateValue = p.GetValue(value) as DateTime?;
-                    
-                    if (dateValue == null)
-                        dateValue = DateTime.MinValue;
+                // Try to see if we have a custom converter for this type.
+                dynamic converter = ConverterCache.Get(p.PropertyType);
 
-                    // Firestore requires storing DateTime in UTC
-                    map.Add(p.Name, dateValue?.ToUniversalTime());
-                }
+                if (converter != null)
+                    map.Add(p.Name, converter.ToFirestore((dynamic)value));
                 else
-                {
-                    IFirestoreConverter<T> converter = GetConverter<T>(p);  
-                    
-                    if (converter != null)
-                        map.Add(p.Name, converter.ToFirestore((T)p.GetValue(value)));
-                    else
-                        map.Add(p.Name, p.GetValue(value));
-                }
+                    map.Add(p.Name, value);
             }
             return map;
         } 
 
-        private IFirestoreConverter<P> GetConverter<P>(PropertyInfo p)
-        {
-            if (_registry == null)
-                return null;
-
-            foreach (var c in _registry)
-            {
-                var converter = c as IFirestoreConverter<P>;
-
-                if (converter == null)
-                    continue;
-
-                if (converter.GetType().GenericTypeArguments[0].FullName ==
-                    p.PropertyType.FullName)
-                {
-                    return converter;
-                }
-            }
-            
-            return null;
-        }
 
         public T FromFirestore(object value)
         {
@@ -159,74 +127,139 @@ namespace GcpHelpers.Firestore
 
             try
             {
-                if (propertyType == typeof(DateTime))
+                if (propertyType.IsEnum)
                 {
-                    Timestamp obj = (Timestamp)value;
-                    property.SetValue(item, obj.ToDateTime());
+                    SetEnum(item, property, value);
                 }
-                else if (propertyType.IsEnum)
+                else if (propertyType == typeof(Int32) || propertyType == typeof(Int16))
                 {
-                    if (value == null)
-                        return;
-                        
-                    if (value is int)
-                    {
-                        string name = Enum.GetName(propertyType, value);
-                        property.SetValue(item, Enum.Parse(propertyType, name));
-                    }
-                    else
-                    {
-                        property.SetValue(item, 
-                            Enum.Parse(propertyType, value.ToString())
-                        );
-                    }
-                }
-                else if (propertyType == typeof(Int32))
-                {
-                    // Firestore always deserlizes int as Int64.
-                    property.SetValue(item, Convert.ToInt32(value));
+                    SetInt32(item, property, value);
                 }
                 else if (propertyType == typeof(string))
                 {
-                    property.SetValue(item, value.ToString());      
+                    SetString(item, property, value);
                 }                         
-                else if (value is IEnumerable<object> && propertyType.IsGenericType)
-                {
-                    // Generic Lists of child objects are not handled implicitly since we 
-                    // are using a custom converter, so recursively create converters.
-                    IList list = Helper.CreateGenericList(property, value);
-                    property.SetValue(item, list);
-                }
-                else if (value is List<object> && propertyType.IsArray)
-                {
-                    Type generic = typeof(List<>);
-                    Type[] typeArgs = { propertyType.GetElementType() };
-                    Type constructed = generic.MakeGenericType(typeArgs);
-                    
-                    var instance = Activator.CreateInstance(constructed);
-                    MethodInfo method = constructed.GetMethod("ToArray");
-
-                    foreach (var o in (List<object>)value)
-                    {
-                        ((IList)instance).Add(o);
-                    }
-
-                    property.SetValue(item, method.Invoke(instance, null));
-                }       
                 else if (value is IDictionary<string, object>)
                 {
-                    property.SetValue(item, 
-                        Helper.ConvertFromFirestore(property, value));
+                    SetCustom(item, property, value);
+                }
+                else if (value is IEnumerable<object>)
+                {
+                    SetList(item, property, value);
                 }
                 else 
                 {
-                    property.SetValue(item, value);
+                    SetCustom(item, property, value);
                 }
             }
             catch (Exception e)
             {
                 Console.WriteLine($"Error in TrySetValue {property.Name}: {e.Message}");
             }
+        }
+
+        private void SetEnum(object item, PropertyInfo property, object value)
+        {
+            Type propertyType = property.PropertyType;
+
+            if (value == null)
+                return;
+                
+            if (value is int)
+            {
+                string name = Enum.GetName(propertyType, value);
+                property.SetValue(item, Enum.Parse(propertyType, name));
+            }
+            else
+            {
+                property.SetValue(item, 
+                    Enum.Parse(propertyType, value.ToString())
+                );
+            }
+        }
+
+        private void SetString(object item, PropertyInfo property, object value)
+        {
+            property.SetValue(item, value.ToString());                  
+        }
+
+        private void SetInt32(object item, PropertyInfo property, object value)
+        {
+            // Firestore always deserlizes int as Int64.
+            property.SetValue(item, Convert.ToInt32(value));            
+        }
+
+        private void SetList(object item, PropertyInfo property, object value)
+        {
+            Type type;
+            
+            if (property.PropertyType.IsGenericType)
+            {
+                type = property.PropertyType.GenericTypeArguments.First();
+            }
+            else if (property.PropertyType.IsArray)
+            {
+                type = property.PropertyType.GetElementType();
+            }
+            else
+            {
+                throw new ApplicationException(
+                    $"Unable to determine element type of {property.PropertyType}");
+            }
+
+            dynamic converter = ConverterCache.Get(type);
+
+            IList list = FirestoreListDeserializer.CreateGenericList(type);
+
+            foreach (var listItem in (IEnumerable<object>)value) 
+            {
+                if (converter != null)
+                {
+                    var result = converter.FromFirestore(listItem);
+                    list.Add(result);
+                }
+                else
+                {
+                    list.Add(listItem);
+                }
+            }
+
+            if (property.PropertyType.IsArray)
+            {
+                property.SetValue(item, 
+                    CreateArray(property.PropertyType, list));
+            }
+            else
+            {
+                property.SetValue(item, list);
+            }
+        }
+
+        private void SetCustom(object item, PropertyInfo property, object value)
+        {
+            dynamic converter = ConverterCache.Get(property.PropertyType);
+
+            if (converter != null)
+            {
+                object converted = converter.FromFirestore(value);
+                property.SetValue(item, converted);            
+            }
+            else
+            {
+                property.SetValue(item, value);
+            }
+        }
+
+        private object CreateArray(Type type, IList list)
+        {
+            Type elementType = type.GetElementType();
+
+            Array array = Array.CreateInstance(elementType, list.Count);
+            
+            for (int i = 0; i < list.Count; i++)
+                array.SetValue(list[i], i);
+
+            return array;
         }
     }
 }
