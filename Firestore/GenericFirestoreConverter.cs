@@ -1,21 +1,32 @@
 using System.Reflection;
 using Google.Cloud.Firestore;
 using System.Collections;
+using Microsoft.Extensions.Logging;
 
 namespace GcpHelpers.Firestore
 {
+    public interface IConverterSupportsLog
+    {
+        public ILogger Log { set; } 
+    }
+
     /// <summary>
     /// Implements a generic custom converter to handle default POCO serialization
     /// without explicit attribute decoration.
     /// <see ref="https://cloud.google.com/dotnet/docs/reference/Google.Cloud.Firestore/latest/datamodel#custom-converters">Custom Converters</see>
     /// </summary>
-    public class GenericFirestoreConverter<T> : IFirestoreConverter<T> 
+    public class GenericFirestoreConverter<T> : IFirestoreConverter<T>, 
+        IConverterSupportsLog 
             where T : class, new()
     {
         private readonly PropertyInfo[] _properties;
         private readonly string _idProperty;
         // Expected attribute name for the required unique identifier.
         private const string FirestoreId = "id";
+        
+        private ILogger _log;
+
+        public ILogger Log { set { _log = value; }}
 
         /// <summary>
         /// Create a converter by specifing the unique identifier property name
@@ -44,6 +55,10 @@ namespace GcpHelpers.Firestore
             
             foreach(var p in _properties)
             {
+                // Do not serialize properties without a public getter.   
+                if (!p.CanRead)
+                    continue;
+
                 object value = p.GetValue(source);
 
                 if (value == null)
@@ -81,8 +96,9 @@ namespace GcpHelpers.Firestore
                         property = GetProperty(_idProperty);
                     else
                         property = GetProperty(pair.Key);
-                    
-                    if (property != null)
+
+                    // Don't write properties that don't have a public setter.
+                    if (property != null && property.CanWrite)
                         TrySetValue(item, property, pair.Value);
                 }
             }
@@ -90,13 +106,8 @@ namespace GcpHelpers.Firestore
             return item;
         }
 
-        private PropertyInfo[] GetProperties()
-        {
-            var properties = typeof(T).GetProperties(BindingFlags.Public|BindingFlags.Instance);
-            // Only use properties that can be written to and read.
-            return properties.Where(p => p.CanRead == true && p.CanWrite == true)
-                .ToArray();
-        }
+        private PropertyInfo[] GetProperties() =>
+            typeof(T).GetProperties(BindingFlags.Public|BindingFlags.Instance);
 
         private PropertyInfo GetProperty(string name)
         {  
@@ -154,7 +165,7 @@ namespace GcpHelpers.Firestore
             }
             catch (Exception e)
             {
-                Console.WriteLine($"Error in TrySetValue {property.Name}: {e.Message}");
+                _log?.LogError($"Error in TrySetValue {property.Name}", e);
             }
         }
 

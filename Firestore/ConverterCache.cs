@@ -1,5 +1,6 @@
 using Google.Cloud.Firestore;
 using System.Reflection;
+using Microsoft.Extensions.Logging;
 
 namespace GcpHelpers.Firestore;
 
@@ -47,7 +48,18 @@ public class ConverterCache
         AddDefaultConverters();
 
         return registry;
-    }    
+    }
+
+    public static void AddConverterLogger(ILogger log)
+    {
+        foreach (var value in Registry.Values)
+        {
+            var converter = value as IConverterSupportsLog;
+
+            if (converter != null)
+                converter.Log = log;
+        }
+    }
 
     private static void AddDefaultConverters()
     {
