@@ -42,6 +42,8 @@ public class ConverterCache
             method.Invoke(registry, new[] { converter.Value });        
         }
 
+        // Do not return these with the ConverterRegistry as they will 
+        // conflict with the built-in Google.Cloud.Firestore converters
         AddDefaultConverters();
 
         return registry;
@@ -49,6 +51,8 @@ public class ConverterCache
 
     private static void AddDefaultConverters()
     {
+        // If this is returned with ConverterRegistry an endless
+        // recursive call chain will eventually stack overflow.
         Registry.Add(typeof(DateTime), new DateTimeConverter());
     }
 
