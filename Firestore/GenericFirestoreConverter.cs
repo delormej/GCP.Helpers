@@ -67,7 +67,7 @@ namespace GcpHelpers.Firestore
                 // Firestore expects an id property as unique identifier.
                 if (p.Name == _idProperty)
                 {
-                    map.Add(FirestoreId, value);
+                    map.TryAdd(FirestoreId, value);
                 }
 
                 // Try to see if we have a custom converter for this type.
