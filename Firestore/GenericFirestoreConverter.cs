@@ -171,12 +171,16 @@ namespace GcpHelpers.Firestore
 
         private void SetEnum(object item, PropertyInfo property, object value)
         {
-            Type propertyType = property.PropertyType;
-
             if (value == null)
                 return;
+
+            // Check for Nullable<T>'
+            Type propertyType = Nullable.GetUnderlyingType(property.PropertyType);
+
+            if (propertyType == null)
+                propertyType = property.PropertyType;
                 
-            if (value is int)
+            if (value is int || value?.GetType() == typeof(Int64))
             {
                 string name = Enum.GetName(propertyType, value);
                 property.SetValue(item, Enum.Parse(propertyType, name));
