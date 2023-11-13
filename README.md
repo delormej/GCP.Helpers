@@ -77,3 +77,5 @@ For developers maintaining the package, publish using the included wrapper shell
 ```bash
 ./publish.sh
 ```
+
+You will need to login to your [apikeys](https://www.nuget.org/account/apikeys) and get a key.  Save this in a file called `nuget-key` in the root directory of this project.
