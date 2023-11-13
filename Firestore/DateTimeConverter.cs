@@ -9,9 +9,9 @@ namespace GcpHelpers.Firestore;
 /// conversion because that implicit behavior is not exposed by the SDK so we
 /// need to build our own duplciate here.
 /// </summary>
-internal class DateTimeConverter : IFirestoreConverter<DateTime>
+internal class DateTimeConverter : IFirestoreConverter<DateTime?>
 {
-    public object ToFirestore(DateTime source) 
+    public object ToFirestore(DateTime? source) 
     {
         var dateValue = source as DateTime?;
 
@@ -22,7 +22,7 @@ internal class DateTimeConverter : IFirestoreConverter<DateTime>
         return dateValue?.ToUniversalTime();
     }
 
-    public DateTime FromFirestore(object value)
+    public DateTime? FromFirestore(object value)
     {
         if (value == null)
             return DateTime.MinValue;

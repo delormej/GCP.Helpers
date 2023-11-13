@@ -66,6 +66,7 @@ public class ConverterCache
         // If this is returned with ConverterRegistry an endless
         // recursive call chain will eventually stack overflow.
         Registry.Add(typeof(DateTime), new DateTimeConverter());
+        Registry.Add(typeof(DateTime?), new DateTimeConverter());
     }
 
     private static MethodInfo GetGenericAdd(KeyValuePair<Type, object> converter)
