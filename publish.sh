@@ -1,8 +1,8 @@
 #!/bin/sh
 version=1.3.4
 
-dotnet build
-dotnet pack
+dotnet build --configuration release -o ./bin/release/net6.0/
+dotnet pack --configuration release
 
 echo 'Publishing version $version' to nuget.org...
 
@@ -15,6 +15,7 @@ fi
 
 export nugetkey=`cat $nugetfile` 
 
-dotnet nuget push ./bin/Debug/GcpHelpers.$version.nupkg --api-key $nugetkey --source https://api.nuget.org/v3/index.json
+#ls -l ./bin/release/GcpHelpers.$version.nupkg
+dotnet nuget push ./bin/release/GcpHelpers.$version.nupkg --api-key $nugetkey --source https://api.nuget.org/v3/index.json
 
 echo 'Done'
