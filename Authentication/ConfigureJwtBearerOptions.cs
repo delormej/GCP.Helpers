@@ -61,7 +61,7 @@ namespace GcpHelpers.Authentication
             }
             catch (Exception e)
             {
-                _log.LogError("Unable to load public key.", e);
+                _log.LogError("Unable to load public key:\n{e}", e);
                 throw;
             }
         }
