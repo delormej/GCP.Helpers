@@ -8,15 +8,12 @@ namespace GcpHelpers.Authentication
     public class JwtGenerator
     {
         private readonly RsaSecurityKey _key;
-        private readonly string _audience;
-        private readonly string _issuer;
+        private readonly AuthenticationSettings _options;
 
         public JwtGenerator(AuthenticationSettings options)
         {
-            _audience = options.ValidAudience;
+            _options = options;
 
-            _issuer = options.ValidIssuer;
-           
             _key = new RsaSecurityKey(
                 GetPrivateKey(options.PrivateKeyPemFile));
         }
@@ -26,10 +23,10 @@ namespace GcpHelpers.Authentication
             var tokenHandler = new JwtSecurityTokenHandler();
             var tokenDescriptor = new SecurityTokenDescriptor
             {
-                Audience = _audience,
-                Issuer = _issuer,
+                Audience = _options.ValidAudience,
+                Issuer = _options.ValidIssuer,
                 Subject = userClaims,
-                Expires = DateTime.UtcNow.AddMinutes(60),
+                Expires = DateTime.UtcNow.AddMinutes(_options.ExpiresInMinutes),
                 SigningCredentials = new SigningCredentials(_key, SecurityAlgorithms.RsaSha256)
             };
             var token = tokenHandler.CreateToken(tokenDescriptor);
