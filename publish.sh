@@ -1,5 +1,5 @@
 #!/bin/sh
-version=1.3.4
+version=1.3.5
 
 dotnet build --configuration release -o ./bin/release/net6.0/
 dotnet pack --configuration release
